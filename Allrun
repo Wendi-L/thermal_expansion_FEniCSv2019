@@ -1,0 +1,5 @@
+#!/bin/bash
+
+mkdir Benchmark_results
+
+mpirun -np 2 python3 thermoelasticity_Validation.py 2>&1 | tee -a log.parallel3D
