@@ -69,7 +69,7 @@ processID = MPI.rank(mpi_comm_world())
 outputFolderName = "./Benchmark_results/"
 inputFolderName = "./Data_input/"
 
-if processID == 0: print "********** THERMO-ELASTICITY SIMULATION BEGIN **********"
+if processID == 0: print("********** THERMO-ELASTICITY SIMULATION BEGIN **********")
 
 #_________________________________________________________________________________________
 #
@@ -97,9 +97,9 @@ mu_s = Constant(E_s/(2.0*(1.0 + nu_s)))
 lamda_s  = Constant(E_s*nu_s/((1+nu_s)*(1-2*nu_s)))
 kappa  = Constant(alpha*(2*mu_s + 3*lamda_s))
 
-if processID == 0: print "E: ", E_s, "[Pa] ", "rho: ", rho_s, "[kg/m^3] ", "nu: ", nu_s, "[-] "
-if processID == 0: print "Reference temperature: ", T_ref, "[K] ", "Temperature at inner circle boundary: ", T_inner, "[K] ", "Temperature at outer circle boundary: ", T_outer, "[K] "
-if processID == 0: print "Coefficient of thermal expansion: ", alpha, "[1/K] ", "Specific heat capacity: ", c_m, "[m^2/(K*s^2)] ", "Thermal conductivity: ", k, "[kg*m/(K*s^3)] "
+if processID == 0: print("E: ", E_s, "[Pa] ", "rho: ", rho_s, "[kg/m^3] ", "nu: ", nu_s, "[-] ")
+if processID == 0: print("Reference temperature: ", T_ref, "[K] ", "Temperature at inner circle boundary: ", T_inner, "[K] ", "Temperature at outer circle boundary: ", T_outer, "[K] ")
+if processID == 0: print("Coefficient of thermal expansion: ", alpha, "[1/K] ", "Specific heat capacity: ", c_m, "[m^2/(K*s^2)] ", "Thermal conductivity: ", k, "[kg*m/(K*s^3)] ")
 
 #_________________________________________________________________________________________
 #
@@ -110,7 +110,7 @@ Time = float(10)# Total time [s]
 dt = float(1.0)	# Time step [s]
 t = 0			# Start time [s]
 
-if processID == 0: print "Total time: ", Time, "Time step size: ", dt
+if processID == 0: print("Total time: ", Time, "Time step size: ", dt)
 
 #_________________________________________________________________________________________
 #
@@ -160,10 +160,10 @@ if iMeshMethos == 0:
 	# Generate mesh
 	domain2D = Circle(Point(x0_outer, y0_outer), R_outer, Ndomain) - Circle(Point(x0_inner, y0_inner), R_inner, Ndomain)
 	if i3DMeshGeneration == 0:
-		if processID == 0: print "Generating 2D mesh..."
+		if processID == 0: print("Generating 2D mesh...")
 		mesh = generate_mesh(domain2D, Nmesh)
 	elif i3DMeshGeneration == 1:
-		if processID == 0: print "Generating 3D mesh..."
+		if processID == 0: print("Generating 3D mesh...")
 		# Extruded 2D geometry to 3D
 		domain3D = Extrude2D(domain2D, H_cylinder) # The z "thickness"
 		mesh = generate_mesh(domain3D, Nmesh)
@@ -173,12 +173,12 @@ if iMeshMethos == 0:
 elif iMeshMethos == 1:
 	# Load mesh from file
 	if iLoadXML == 0:
-		if processID == 0: print "Loading HDF5 mesh..."
+		if processID == 0: print("Loading HDF5 mesh...")
 		mesh = Mesh()
 		hdf_in = HDF5File(MPI_Claims, inputFolderName + "mesh_boundary_and_values.h5", "r")
 		hdf_in.read(mesh, "/mesh", False)
 	elif iLoadXML == 1:
-		if processID == 0: print "Loading XML mesh..."
+		if processID == 0: print("Loading XML mesh...")
 		mesh = Mesh(inputFolderName + "cylinder.xml")
 	else:
 		sys.exit("ERROR, please select the correct value for iLoadXML")
@@ -187,12 +187,12 @@ else:
 	sys.exit("ERROR, please select the correct mesh generation method")
 
 if iHDF5FileExport == 1:
-	if processID == 0: print "Exporting HDF5 mesh..."
+	if processID == 0: print("Exporting HDF5 mesh...")
 	hdf_out = HDF5File(MPI_Claims, outputFolderName + "mesh_boundary_and_values.h5", "w")
 	if iHDF5MeshExport == 1: hdf_out.write(mesh, "/mesh")
 
 if iInteractiveMeshShow == 1:
-	if processID == 0: print "Interactive Mesh Show ..."
+	if processID == 0: print("Interactive Mesh Show ...")
 	plt.figure()
 	p = plot(mesh, title = "Mesh plot")		
 	plt.show()
@@ -239,16 +239,16 @@ dU = TrialFunction(V)
 
 if (iMeshMethos == 1) and (iHDF5SubdomainsImport == 1):
 	if iLoadXML == 0:
-		if processID == 0: print "Loading HDF5 subdomains ..."
+		if processID == 0: print("Loading HDF5 subdomains ...")
 		subdomains = MeshFunction("size_t", mesh, mesh.topology().dim())
 		hdf_in.read(subdomains, "/subdomains")
 	elif iLoadXML == 1:
-		if processID == 0: print "Loading XML subdomains ..."
+		if processID == 0: print("Loading XML subdomains ...")
 		subdomains = MeshFunction("size_t", mesh, inputFolderName + "cylinder_physical_region.xml")
 	else:
 		sys.exit("ERROR, please select the correct value for iLoadXML")
 else:
-	if processID == 0: print "Creating subdomains ..."
+	if processID == 0: print("Creating subdomains ...")
 	class inner_boundary( SubDomain ):
 		def inside (self , x, on_boundary ):
 			tol = 1e-3
@@ -260,7 +260,7 @@ else:
 			return near(x[0]**2 + x[1]**2, R_outer**2, tol)
 
 if (iHDF5FileExport == 1) and (iHDF5SubdomainsExport == 1):
-	if processID == 0: print "Exporting HDF5 subdomains..." 
+	if processID == 0: print("Exporting HDF5 subdomains...")
 	subdomains = MeshFunction("size_t", mesh, mesh.topology().dim())
 	hdf_out.write(subdomains, "/subdomains")
 
@@ -271,16 +271,16 @@ if (iHDF5FileExport == 1) and (iHDF5SubdomainsExport == 1):
 
 if (iMeshMethos == 1) and (iHDF5BoundariesImport == 1):
 	if iLoadXML == 0:
-		if processID == 0: print "Loading HDF5 boundaries ..."
+		if processID == 0: print("Loading HDF5 boundaries ...")
 		boundaries = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 		hdf_in.read(boundaries, "/boundaries")
 	elif iLoadXML == 1:
-		if processID == 0: print "Loading XML boundaries ..."
+		if processID == 0: print("Loading XML boundaries ...")
 		boundaries = MeshFunction("size_t", mesh, inputFolderName + "cylinder_facet_region.xml")		
 	else:
 		sys.exit("ERROR, please select the correct value for iLoadXML")
 else:
-	if processID == 0: print "Creating boundaries ..."
+	if processID == 0: print("Creating boundaries ...")
 	boundaries = MeshFunction("size_t", mesh, gdim-1)
 
 	boundaries.set_all(0)
@@ -288,7 +288,7 @@ else:
 	inner_boundary().mark (boundaries,2)
 
 if (iHDF5FileExport == 1) and (iHDF5BoundariesExport == 1): 
-	if processID == 0: print "Exporting HDF5 boundaries..."
+	if processID == 0: print("Exporting HDF5 boundaries...")
 	hdf_out.write(boundaries, "/boundaries")
 
 if (iMeshMethos == 1) and (iLoadXML == 0): hdf_in.close()
@@ -296,8 +296,8 @@ if iHDF5FileExport == 1: hdf_out.close()
 
 ds = Measure("ds", domain=mesh, subdomain_data=boundaries, metadata={'quadrature_degree': deg})
 
-if processID == 0: print "Dofs: ",V.dim(), "Cells:", mesh.num_cells()
-if processID == 0: print "geometry dimension: ",gdim
+if processID == 0: print("Dofs: ",V.dim(), "Cells:", mesh.num_cells())
+if processID == 0: print("geometry dimension: ",gdim)
 
 #_________________________________________________________________________________________
 #
@@ -314,11 +314,11 @@ bc5 = DirichletBC(V.sub(1), T_inner, boundaries, 2)
 bc6 = DirichletBC(V.sub(1), T_outer, boundaries, 1)
 
 if gdim == 2:
-	if processID == 0: print "Creating 2D boundary conditions ..."
+	if processID == 0: print("Creating 2D boundary conditions ...")
 	bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
 
 elif gdim == 3:
-	if processID == 0: print "Creating 3D boundary conditions ..."
+	if processID == 0: print("Creating 3D boundary conditions ...")
 	bc7 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 1)
 	bc8 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 2)
 	
@@ -370,7 +370,7 @@ def von_Mises_projected (v, dT, dimension, scalar_function_space):
 #%% Prepare post-process files
 #_________________________________________________________________________________________
 
-print ("prepare post-process files")
+print("prepare post-process files")
 dis_file = File(outputFolderName + "displacement.pvd")
 str_file = File(outputFolderName + "stress.pvd")
 tmp_file = File(outputFolderName + "temperature.pvd")
@@ -407,7 +407,7 @@ solver.parameters['linear_solver'] = "mumps"
 #_________________________________________________________________________________________
 
 while t <= Time:
-	if processID == 0: print "Time: ", t
+	if processID == 0: print("Time: ", t)
 	
 	# Update real time	
 	times.append(t)
@@ -469,6 +469,6 @@ if gdim == 2:
 simtime = toc()
 
 if processID == 0: 
-	print "Total Simulation time: %g [s]" % simtime
-	print "\n"
-	print "********** THERMO-ELASTICITY SIMULATION COMPLETED **********"
+	print("Total Simulation time: %g [s]" % simtime)
+	print("\n")
+	print("********** THERMO-ELASTICITY SIMULATION COMPLETED **********")
