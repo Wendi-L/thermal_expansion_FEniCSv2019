@@ -1,4 +1,5 @@
 #!/bin/bash
 
 rm -r Benchmark_results
+cd dummyCFD && make clean && cd ..
 rm log.*

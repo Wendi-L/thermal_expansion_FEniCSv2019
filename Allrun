@@ -1,5 +1,32 @@
 #!/bin/bash
 
+# Run from this directory
+cd ${0%/*} || exit 1
+
+export PYTHONPATH=$HOME/working/apps/MUI/MUI-1.2/wrappers/Python:$PYTHONPATH
+
 mkdir Benchmark_results
 
-mpirun -np 2 python3 thermoelasticity_Validation.py 2>&1 | tee -a log.parallel3D
+domainFluid=${PWD}/dummyCFD
+domainStructure=${PWD}
+
+# Ranks set to each domain
+numProcsFluid=1
+numProcsStructure=1
+
+solverFluid=./PUSHER_FETCHER_1
+solverStructure=thermoelasticity_Validation.py
+
+cd ${domainFluid}
+make
+cd ..
+
+# parallel run
+mpirun -np ${numProcsFluid} -wdir ${domainFluid} ${solverFluid} : \
+       -np ${numProcsStructure} -wdir ${domainStructure} python3 -m mpi4py ${solverStructure} 2>&1 | tee -a log.parallel3D
+#mpirun -np ${numProcsStructure} -wdir ${domainStructure} python3 -m mpi4py ${solverStructure} 2>&1 | tee -a log.parallel3D
+#mpirun -np ${numProcsFluid} -wdir ${domainStructure} python3 -m mpi4py PUSHER_FETCHER_0.py : \
+#       -np ${numProcsStructure} -wdir ${domainStructure} python3 -m mpi4py ${solverStructure} 2>&1 | tee -a log.parallel3D
+#mpirun -np ${numProcsFluid} -wdir ${domainFluid} ${solverFluid} : \
+#       -np ${numProcsStructure} -wdir ${domainStructure} python3 -m mpi4py PUSHER_FETCHER_0.py 2>&1 | tee -a log.parallel3D
+echo "Done" 
