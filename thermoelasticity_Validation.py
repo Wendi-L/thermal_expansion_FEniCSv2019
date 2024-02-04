@@ -24,24 +24,19 @@ __license__ = "GNU GPL version 3 or any later version"
 #_________________________________________________________________________________________
 
 from dolfin import *
-from fenics import *
 from mshr import *
 import numpy as np
 import math
 import sys
 from time import sleep
-import matplotlib.pyplot as plt
+from mpi4py import MPI
 
 #_________________________________________________________________________________________
 #
-#%% Adjust log level
+#%% Mode option
 #_________________________________________________________________________________________
 
-set_log_active(True)
-set_log_level(PROGRESS) # PROGRESS DEBUG LEVEL False
-
-# Starts the wall clock
-tic()
+iInputTemperature = 1 		#	0-The temperature distribution will be calculated; 1-The temperature distribution will be received by MUI.
 
 #_________________________________________________________________________________________
 #
@@ -217,20 +212,33 @@ ele_fin = FiniteElement('CG', mesh.ufl_cell(), deg) 		# Temperature Finite eleme
 v_scalar = FunctionSpace(mesh, "P", deg)					# Stress scalar function space
 V = FunctionSpace(mesh, MixedElement([ele_vec, ele_fin]))	# Mixed (displacement & Temperature) function space
 
+if iInputTemperature == 0:															
+	V = FunctionSpace(mesh, MixedElement([ele_vec, ele_fin]))
+elif iInputTemperature == 1:
+	V = FunctionSpace(mesh, ele_vec)						# displacement function space
+
 #_________________________________________________________________________________________
 #
 #%% Define functions, test functions and trail functions
 #_________________________________________________________________________________________
 
-U = Function(V)
-Uold = Function(V)
-U_ = TestFunction(V)
-dU = TrialFunction(V)
+if iInputTemperature == 0:
+	U = Function(V)
+	Uold = Function(V)
+	U_ = TestFunction(V)
+	dU = TrialFunction(V)
 
-(u, T) = split(U)
-(uold, Told) = split(Uold)
-(u_, T_) = split(U_)
-(du, dT) = split(dU)
+	(u, T) = split(U)
+	(uold, Told) = split(Uold)
+	(u_, T_) = split(U_)
+	(du, dT) = split(dU)
+
+elif iInputTemperature == 1:
+	u = Function(V)
+	uold = Function(V)
+	u_ = TestFunction(V)
+	du = TrialFunction(V)
+	dT = Function(v_scalar)
 
 #_________________________________________________________________________________________
 #
@@ -304,28 +312,55 @@ if processID == 0: print("geometry dimension: ",gdim)
 #%% Define boundary conditions
 #_________________________________________________________________________________________
 
-bc1 = DirichletBC(V.sub(0).sub(0), Expression(("0.25*cos(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
-bc2 = DirichletBC(V.sub(0).sub(1), Expression(("0.25*sin(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
-
-bc3 = DirichletBC(V.sub(0).sub(0), Constant(0.), boundaries, 1)	
-bc4 = DirichletBC(V.sub(0).sub(1), Constant(0.), boundaries, 1)
-
-bc5 = DirichletBC(V.sub(1), T_inner, boundaries, 2)
-bc6 = DirichletBC(V.sub(1), T_outer, boundaries, 1)
-
-if gdim == 2:
-	if processID == 0: print("Creating 2D boundary conditions ...")
-	bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
-
-elif gdim == 3:
-	if processID == 0: print("Creating 3D boundary conditions ...")
-	bc7 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 1)
-	bc8 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 2)
+if iInputTemperature == 0:
+	bc1 = DirichletBC(V.sub(0).sub(0), Expression(("0.25*cos(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
+	bc2 = DirichletBC(V.sub(0).sub(1), Expression(("0.25*sin(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
 	
-	bcs = [bc1, bc2, bc3, bc4, bc5, bc6, bc7, bc8]
+	bc3 = DirichletBC(V.sub(0).sub(0), Constant(0.), boundaries, 1)	
+	bc4 = DirichletBC(V.sub(0).sub(1), Constant(0.), boundaries, 1)
+	
+	bc5 = DirichletBC(V.sub(1), T_inner, boundaries, 2)
+	bc6 = DirichletBC(V.sub(1), T_outer, boundaries, 1)
+	
+	if gdim == 2:
+		if processID == 0: print("Creating 2D boundary conditions ...")
+		bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
+	
+	elif gdim == 3:
+		if processID == 0: print("Creating 3D boundary conditions ...")
+		bc7 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 1)
+		bc8 = DirichletBC(V.sub(0).sub(2), Constant(0.), boundaries, 2)
+		
+		bcs = [bc1, bc2, bc3, bc4, bc5, bc6, bc7, bc8]
+	
+	else:
+		sys.exit("ERROR, gdim is a wrong value")
 
-else:
-	sys.exit("ERROR, gdim is a wrong value")
+elif iInputTemperature == 1:
+		if processID == 0: print ("Creating 3D boundary conditions ...   ", end="", flush=True)
+	
+		bc1 = DirichletBC(V.sub(0), Expression(("0.25*cos(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
+		bc2 = DirichletBC(V.sub(1), Expression(("0.25*sin(atan2(x[1],x[0]))"),degree=deg), boundaries, 2)
+
+		bc3 = DirichletBC(V.sub(0), Constant(0.), boundaries, 1)	
+		bc4 = DirichletBC(V.sub(1), Constant(0.), boundaries, 1)
+
+		if gdim == 2:
+			if processID == 0: print ("Creating 2D boundary conditions ...   ", end="", flush=True)
+			bcs = [bc1, bc2, bc3, bc4]
+
+		elif gdim == 3:
+			if processID == 0: print ("Creating 3D boundary conditions ...   ", end="", flush=True)
+			bc5 = DirichletBC(V.sub(2), Constant(0.), boundaries, 1)
+			bc6 = DirichletBC(V.sub(2), Constant(0.), boundaries, 2)
+		
+			bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#%% Define MUI samplers and commit ZERO step
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+if iInputTemperature == 1:
+	
 
 #_________________________________________________________________________________________
 #
@@ -383,19 +418,32 @@ tmp_file = File(outputFolderName + "temperature.pvd")
 # Define the mechanical weak variational form
 Form_TE_mechanical = inner(sigma(du, dT), epsilon(u_))*dx
 
-# Define the thermal weak variational form
-Form_TE_thermal = ((rho_s*c_m*(dT-Told)/dt)*T_ + (kappa*T_ref*tr(epsilon(du-uold))/dt)*T_)*dx
-Form_TE_thermal += (dot(k*grad(dT), grad(T_)))*dx
+if iInputTemperature == 0:
+	# Define the thermal weak variational form
+	Form_TE_thermal = ((rho_s*c_m*(dT-Told)/dt)*T_ + (kappa*T_ref*tr(epsilon(du-uold))/dt)*T_)*dx
+	Form_TE_thermal += (dot(k*grad(dT), grad(T_)))*dx
+	
+	Form_TE = Form_TE_mechanical + Form_TE_thermal
+	
+elif iInputTemperature == 1:
+	Form_TE = Form_TE_mechanical
 
-Form_TE = Form_TE_mechanical + Form_TE_thermal
+else:
+	sys.exit("ERROR, please select the correct value for iInputTemperature")
 
 #_________________________________________________________________________________________
 #
 #%% Initialize solver
 #_________________________________________________________________________________________
 
-problem = LinearVariationalProblem(lhs(Form_TE), rhs(Form_TE), U, bcs=bcs, \
-	form_compiler_parameters={"cpp_optimize": True, "representation": "uflacs", "quadrature_degree": deg})
+if iInputTemperature == 0:
+	problem = LinearVariationalProblem(lhs(Form_TE), rhs(Form_TE), U, bcs=bcs, \
+		form_compiler_parameters={"cpp_optimize": True, "representation": "uflacs", "quadrature_degree": deg})
+elif iInputTemperature == 1:
+	problem = LinearVariationalProblem(lhs(Form_TE), rhs(Form_TE), u, bcs=bcs, \
+		form_compiler_parameters={"cpp_optimize": True, "representation": "uflacs", "quadrature_degree": deg})
+else:
+	sys.exit("ERROR, please select the correct value for iInputTemperature")
 
 solver = LinearVariationalSolver(problem)
 
@@ -412,63 +460,66 @@ while t <= Time:
 	# Update real time	
 	times.append(t)
 
+	if processID == 0: print("Obtaining Temperature Space at Present Time Step ...   ", end="", flush=True)
+
+	if iInputTemperature == 1:
+		dT_temp = Function(v_scalar)
+		dT_vec = dT_temp.vector().get_local()
+		for i in range(len(dT_vec)):
+			dist = math.sqrt(pow(v_scalar.tabulate_dof_coordinates()[i][0],2) + pow(v_scalar.tabulate_dof_coordinates()[i][1],2))
+			dT_vec[i] = 9.3453*pow(dist,6) - 40.27*pow(dist,5) + 72.808*pow(dist,4) - 72.138*pow(dist,3) + 43.406*pow(dist,2) - 17.756*dist + 5.6052
+		dT_temp.vector().set_local(dT_vec)
+		dT_temp.vector().apply("insert")
+		dT.assign(dT_temp)
+
+	if processID == 0: print("Solving ...   ", end="", flush=True)
+
 	# Solving the thermo-elasticity functions inside the time loop
 	solver.solve()
 	
 	# Calculate Von. Mises Stress
-	vM_Stress = von_Mises_projected(u, T, gdim, v_scalar)
-	
+	if iInputTemperature == 0:
+		vM_Stress = von_Mises_projected(u, T, gdim, v_scalar)
+	elif iInputTemperature == 1:
+		vM_Stress = von_Mises_projected(u, dT, gdim, v_scalar)
+	else:
+		sys.exit("ERROR, please select the correct value for iInputTemperature")
+
 	# Move to next interval
 	t += dt
-	dispi,tempi = U.split(True)
-	Uold.assign(U)
 	
-	# Rename parameters
-	dispi.rename('Displacement', 'dispi')
-	tempi.rename('Temperature', 'tempi')
-	vM_Stress.rename('von_Mises stress', 'sigma')
+	if iInputTemperature == 0:
+		dispi,tempi = U.split(True)
+		Uold.assign(U)
 
-	# Write to file on displacement, temperature and Von. Mises Stress	
-	dis_file << dispi
-	tmp_file << tempi
-	str_file << vM_Stress
+		# Rename parameters
+		dispi.rename('Displacement', 'dispi')
+		tempi.rename('Temperature', 'tempi')
+		vM_Stress.rename('von_Mises stress', 'sigma')
+	
+		# Write to file on displacement, temperature and Von. Mises Stress	
+		dis_file << dispi
+		tmp_file << tempi
+		str_file << vM_Stress
 
-#_________________________________________________________________________________________
-#
-#%% Plot figures at final time step
-#_________________________________________________________________________________________
+	elif iInputTemperature == 1:
+		uold.assign(u)
 
-plt.figure()
-p = plot(von_Mises (u, T, gdim), title="von Mises stress")
-plt.xlim((-4*R_inner, 4*R_inner))
-plt.ylim((-4*R_inner, 4*R_inner))
-plt.colorbar(p)
-plt.savefig(outputFolderName + 'von_Mises_stress.png')
+		u.rename('Displacement', 'dispi')
+		dT.rename('Temperature', 'tempi')
+		vM_Stress.rename('von_Mises stress', 'sigma')
 
-plt.figure()
-p = plot(T, title="Temperature variation")
-plt.xlim((-4*R_inner, 4*R_inner))
-plt.ylim((-4*R_inner, 4*R_inner))
-plt.colorbar(p)
-plt.savefig(outputFolderName + 'Temperature.png')
+		dis_file << u
+		tmp_file << dT
+		str_file << vM_Stress
 
-if gdim == 2:
-	plt.figure()
-	p = plot(u, title="Displacement variation")
-	plt.xlim((-4*R_inner, 4*R_inner))
-	plt.ylim((-4*R_inner, 4*R_inner))
-	plt.colorbar(p)
-	plt.savefig(outputFolderName + 'Displacement.png')
+	else:
+		sys.exit("ERROR, please select the correct value for iInputTemperature")
 
 #_________________________________________________________________________________________
 #
-#%% Calculate wall time
+#%% Finishing Log
 #_________________________________________________________________________________________
-
-# Finish the wall clock
-simtime = toc()
 
 if processID == 0: 
-	print("Total Simulation time: %g [s]" % simtime)
-	print("\n")
 	print("********** THERMO-ELASTICITY SIMULATION COMPLETED **********")
